@@ -1,4 +1,4 @@
-import transporter from '../config/nodemailer.js';
+import sendCpanelEmail from '../utils/cpanelEmail.js';
 import googleDriveService from '../config/googleDrive.js';
 import Paper from '../models/paperModel.js';
 import fs from 'fs';
@@ -58,7 +58,7 @@ export const submitPaper = async (req, res) => {
 
     // Send email notification
     const mailOptions = {
-      to: process.env.SENDER_EMAIL,
+      to: process.env.CONTACT_EMAIL || process.env.CPANEL_EMAIL_USER,
       subject: `New Paper Submission: ${title}`,
       html: `
         <h3>New Paper Submission</h3>
@@ -71,12 +71,21 @@ export const submitPaper = async (req, res) => {
       `
     };
 
-    await transporter.sendMail(mailOptions);
+    let emailSent = true;
+    try {
+      await sendCpanelEmail({ ...mailOptions, replyTo: email });
+    } catch (emailError) {
+      emailSent = false;
+      console.error('Paper saved but notification email failed:', emailError.message);
+    }
     
-    res.status(200).json({ 
+    res.status(emailSent ? 200 : 202).json({ 
       success: true, 
-      message: 'Paper submitted successfully!',
-      submissionId: paper._id
+      message: emailSent
+        ? 'Paper submitted successfully!'
+        : 'Paper submitted successfully. Email notification is temporarily delayed.',
+      submissionId: paper._id,
+      emailSent,
     });
     
   } catch (err) {

@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import userModel from '../models/userModel.js';
 import membershipModel from '../models/membershipModel.js';
 import transactionModel from '../models/transactionModel.js';
-import transporter from '../config/nodemailer.js';
+import sendCpanelEmail from '../utils/cpanelEmail.js';
 import { validationResult } from 'express-validator';
 
 // Membership pricing configuration
@@ -84,12 +84,11 @@ if (!stripe) {
 // Helper function to send email notifications
 const sendEmailNotification = async (to, subject, template, data) => {
   try {
-    const mailOptions = {
+    await sendCpanelEmail({
       to,
       subject,
       html: generateEmailTemplate(template, data)
-    };
-    await transporter.sendMail(mailOptions);
+    });
     console.log('Email notification sent successfully to:', to);
   } catch (error) {
     console.error('Error sending email notification:', error);
@@ -188,6 +187,25 @@ const generateEmailTemplate = (template, data) => {
             <p>Need help? Contact us at support@isamc.org</p>
             <p>© 2024 Indian Society for Advancement of Materials and Process Engineering</p>
           </div>
+        </div>
+      </body>
+      </html>
+    `,
+    'refund_initiated': `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h1 style="color: #2563eb;">Refund initiated</h1>
+          <p>Dear ${data.userName},</p>
+          <p>Your ISAMC membership refund has been initiated.</p>
+          <div style="background: #f8fafc; padding: 20px; border-left: 4px solid #2563eb;">
+            <p><strong>Transaction ID:</strong> ${data.transactionId}</p>
+            <p><strong>Refund amount:</strong> ₹${data.refundAmount}</p>
+            <p><strong>Reason:</strong> ${data.reason || 'Not provided'}</p>
+          </div>
+          <p>The amount will be returned according to your payment provider's processing time.</p>
+          <p>Best regards,<br>The ISAMC Team</p>
         </div>
       </body>
       </html>

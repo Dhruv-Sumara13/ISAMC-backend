@@ -1,80 +1,117 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import logger from '../config/logger.js';
+
 dotenv.config();
 
-// Debug logging
-console.log('CPANEL_SMTP_HOST:', process.env.CPANEL_SMTP_HOST || 'NOT SET');
-console.log('CPANEL_SMTP_PORT:', process.env.CPANEL_SMTP_PORT || 'NOT SET');
-console.log('CPANEL_EMAIL_USER:', process.env.CPANEL_EMAIL_USER || 'NOT SET');
-console.log('CPANEL_EMAIL_PASS:', process.env.CPANEL_EMAIL_PASS ? 'Loaded' : 'NOT LOADED');
-console.log('CPANEL_SENDER_NAME:', process.env.CPANEL_SENDER_NAME || 'NOT SET');
+let transporter;
 
-// Create transporter for cPanel SMTP
+const getRequiredSetting = (name) => {
+  const value = process.env[name]?.trim();
+  if (!value) {
+    throw new Error(`${name} is not configured`);
+  }
+  return value;
+};
+
 const createTransporter = () => {
+  const port = Number.parseInt(process.env.CPANEL_SMTP_PORT, 10) || 587;
+
   return nodemailer.createTransport({
-    host: process.env.CPANEL_SMTP_HOST,
-    port: parseInt(process.env.CPANEL_SMTP_PORT) || 587,
-    secure: process.env.CPANEL_SMTP_PORT === '465', // true for 465, false for other ports
+    host: getRequiredSetting('CPANEL_SMTP_HOST'),
+    port,
+    secure: port === 465,
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 100,
     auth: {
-      user: process.env.CPANEL_EMAIL_USER,
-      pass: process.env.CPANEL_EMAIL_PASS,
+      user: getRequiredSetting('CPANEL_EMAIL_USER'),
+      pass: getRequiredSetting('CPANEL_EMAIL_PASS'),
     },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
     tls: {
-      // Do not fail on invalid certs
-      rejectUnauthorized: false
-    }
+      rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED !== 'false'
+    },
+    disableFileAccess: true,
+    disableUrlAccess: true,
   });
 };
 
-const sendCpanelEmail = async ({ to, subject, html, text }) => {
-  const transporter = createTransporter();
+const getTransporter = () => {
+  if (!transporter) {
+    transporter = createTransporter();
+  }
+  return transporter;
+};
+
+const sendCpanelEmail = async ({
+  to,
+  subject,
+  html,
+  text,
+  attachments,
+  replyTo,
+}) => {
+  const receivers = (Array.isArray(to) ? to : [to])
+    .map((receiver) => receiver?.trim())
+    .filter(Boolean);
+
+  if (receivers.length === 0) {
+    throw new Error('At least one email recipient is required');
+  }
+
+  if (!subject?.trim()) {
+    throw new Error('Email subject is required');
+  }
 
   const sender = {
     name: process.env.CPANEL_SENDER_NAME || 'ISAMC Team',
-    address: process.env.CPANEL_EMAIL_USER
+    address: getRequiredSetting('CPANEL_EMAIL_USER')
   };
-
-  const receivers = Array.isArray(to) ? to : [to];
 
   const mailOptions = {
     from: sender,
     to: receivers,
     subject,
     text,
-    ...(html && { html })
+    ...(html && { html }),
+    ...(replyTo && { replyTo }),
+    ...(attachments?.length && { attachments }),
   };
 
   try {
-    console.log('Sending cPanel email to:', receivers);
-    console.log('Sender:', sender);
-    console.log('SMTP Host:', process.env.CPANEL_SMTP_HOST);
-    console.log('SMTP Port:', process.env.CPANEL_SMTP_PORT);
-    
-    const info = await transporter.sendMail(mailOptions);
-    console.log('cPanel email sent successfully:', info.messageId);
-    console.log('Response:', info.response);
+    const info = await getTransporter().sendMail(mailOptions);
+    logger.info('Email sent successfully', {
+      messageId: info.messageId,
+      recipientCount: receivers.length,
+      subject,
+    });
     return info;
   } catch (error) {
-    console.error('cPanel email error details:', {
-      message: error.message,
+    logger.error(`Email delivery failed: ${error.message}`, {
       code: error.code,
       command: error.command,
       responseCode: error.responseCode,
-      response: error.response
+      subject,
+      stack: error.stack,
     });
     throw error;
   }
 };
 
-// Test email connection
 export const testEmailConnection = async () => {
   try {
-    const transporter = createTransporter();
-    await transporter.verify();
-    console.log('cPanel SMTP connection verified successfully');
+    await getTransporter().verify();
+    logger.info('SMTP connection verified successfully');
     return true;
   } catch (error) {
-    console.error('cPanel SMTP connection failed:', error.message);
+    logger.error(`SMTP connection verification failed: ${error.message}`, {
+      code: error.code,
+      command: error.command,
+      stack: error.stack,
+    });
     return false;
   }
 };

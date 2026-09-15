@@ -2,11 +2,12 @@ import express from 'express';
 import { sendContactMessage, sendMembershipApplication, submitPaper } from '../controller/contactController.js';
 import multer from 'multer';
 import { validateContact, handleValidationErrors } from '../middleware/validation.js';
+import { optionalUserAuth } from '../middleware/userAuth.js';
 
 const contactRouter = express.Router();
 
 contactRouter.post('/send-message', validateContact, handleValidationErrors, sendContactMessage);
-contactRouter.post('/send-membership-application', sendMembershipApplication);
+contactRouter.post('/send-membership-application', optionalUserAuth, sendMembershipApplication);
 
 const upload = multer({
   storage: multer.memoryStorage(),

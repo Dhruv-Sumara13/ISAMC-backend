@@ -1,4 +1,6 @@
-import app from '../app.js';
+import app, { databaseReady } from '../app.js';
 import serverless from 'serverless-http';
 
-export default serverless(app); 
+await databaseReady;
+
+export default serverless(app);

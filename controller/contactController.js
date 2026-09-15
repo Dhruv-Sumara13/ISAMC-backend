@@ -1,4 +1,4 @@
-import transporter from "../config/nodemailer.js";
+import { randomBytes } from "node:crypto";
 import userModel from "../models/userModel.js";
 import membershipModel from "../models/membershipModel.js";
 import sendCpanelEmail from "../utils/cpanelEmail.js";
@@ -104,7 +104,9 @@ This message was sent from the ISAMC website contact form.
     await sendCpanelEmail({
       to: process.env.CONTACT_EMAIL || process.env.CPANEL_EMAIL_USER,
       subject: `Contact Form: ${subject}`,
-      text: mailOptions.text
+      html: mailOptions.html,
+      text: mailOptions.text,
+      replyTo: email,
     });
 
     const confirmationMailOptions = {
@@ -160,7 +162,8 @@ The ISAMC Team
     await sendCpanelEmail({
       to: email,
       subject: "Thank you for contacting ISAMC",
-      text: confirmationMailOptions.text
+      html: confirmationMailOptions.html,
+      text: confirmationMailOptions.text,
     });
 
     return res.json({
@@ -288,8 +291,9 @@ export const sendMembershipApplication = async (req, res) => {
       tierTitle
     } = req.body;
 
-    // Get user ID from the request (assuming it's passed from frontend)
-    const userId = req.user?._id || req.body.userId;
+    // Only trust an authenticated identity; never accept an arbitrary user ID
+    // from the request body.
+    const userId = req.user?._id;
 
     if (!fullName || !email || !phone || !institute || !designation || !gender || !dateOfBirth || !expertise || !membershipType) {
       return res.status(400).json({
@@ -442,13 +446,6 @@ This membership application was submitted from the ISAMC website.
       `
     };
 
-    await sendCpanelEmail({
-      to: process.env.CONTACT_EMAIL || process.env.CPANEL_EMAIL_USER,
-      subject: `New Membership Application: ${membershipType}`,
-      html: mailOptions.html,
-      text: mailOptions.text
-    });
-
     const confirmationMailOptions = {
       from: process.env.SENDER_EMAIL,
       to: email,
@@ -507,158 +504,186 @@ The ISAMC Team
       `
     };
 
-    await sendCpanelEmail({
-      to: email,
-      subject: "Thank you for your ISAMC membership application",
-      html: confirmationMailOptions.html,
-      text: confirmationMailOptions.text
+    // Save the application before attempting email delivery. A temporary guest
+    // account keeps applications visible in the existing admin membership view.
+    let userRecord;
+
+    if (userId) {
+      const updateData = {
+        name: fullName,
+        contact: phone,
+        institute,
+        designation,
+        gender,
+        dateOfBirth,
+        expertise,
+        bio: expertise,
+        ...(linkedinProfile && { linkedinUrl: linkedinProfile }),
+      };
+
+      userRecord = await userModel.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true },
+      );
+
+      if (!userRecord) {
+        return res.status(401).json({
+          success: false,
+          message: 'Your account could not be found. Please log in again.',
+        });
+      }
+    } else {
+      userRecord = await userModel.findOne({ email: email.toLowerCase() });
+
+      if (userRecord?.isAccountVerified) {
+        return res.status(409).json({
+          success: false,
+          message: 'An account already exists for this email. Please log in before applying.',
+        });
+      }
+
+      if (!userRecord) {
+        userRecord = new userModel({
+          name: fullName,
+          email,
+          password: randomBytes(32).toString('hex'),
+          contact: phone,
+          institute,
+          designation,
+          gender,
+          dateOfBirth,
+          expertise,
+          linkedinUrl: linkedinProfile || '',
+          bio: expertise,
+          isAccountVerified: false,
+        });
+      } else {
+        userRecord.name = fullName;
+        userRecord.contact = phone;
+        userRecord.institute = institute;
+        userRecord.designation = designation;
+        userRecord.gender = gender;
+        userRecord.dateOfBirth = dateOfBirth;
+        userRecord.expertise = expertise;
+        userRecord.linkedinUrl = linkedinProfile || userRecord.linkedinUrl;
+        userRecord.bio = expertise;
+      }
+
+      await userRecord.save();
+    }
+
+    const amount = Number.parseFloat(
+      String(tierPrice ?? '').replace(/[^\d.]/g, ''),
+    ) || 0;
+    const duration = String(tierDuration || '')
+      .toLowerCase()
+      .includes('life')
+      ? 'lifetime'
+      : 'annual';
+
+    const membershipTypeMapping = {
+      'Student Membership': 'Student',
+      'Regular Membership': 'Regular',
+      'Senior Membership': 'Senior',
+      'Institutional Membership': 'Institutional',
+      'International Membership': 'International',
+      'Life Membership': 'Life',
+      'Honorary Membership': 'Honorary',
+      Student: 'Student',
+      Regular: 'Regular',
+      Senior: 'Senior',
+      Institutional: 'Institutional',
+      International: 'International',
+      Life: 'Life',
+      Honorary: 'Honorary',
+    };
+
+    const mappedMembershipType = membershipTypeMapping[membershipType];
+    if (!mappedMembershipType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid membership type.',
+      });
+    }
+
+    let expiresAt = null;
+    if (duration === 'annual') {
+      expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+    }
+
+    let membership = await membershipModel.findOne({
+      userId: userRecord._id,
+      membershipType: mappedMembershipType,
+      status: { $in: ['active', 'pending'] },
     });
 
-    // Create or update user in database
-    let userRecord = null;
-    try {
-      if (userId) {
-        // Update existing user
-        const updateData = {
-          name: fullName,
-          contact: phone,
-          institute: institute,
-          designation: designation,
-          gender: gender,
-          dateOfBirth: dateOfBirth,
-          expertise: expertise
-        };
-
-        // Add LinkedIn profile if provided
-        if (linkedinProfile) {
-          updateData.linkedinProfile = linkedinProfile;
-        }
-
-        // Add bio if expertise is provided
-        if (expertise) {
-          updateData.bio = expertise;
-        }
-
-        userRecord = await userModel.findByIdAndUpdate(
-          userId,
-          { $set: updateData },
-          { new: true, runValidators: true }
-        );
-
-        console.log('User profile updated successfully with membership form data');
-      } else {
-        // Find or create user by email
-        userRecord = await userModel.findOne({ email });
-        if (!userRecord) {
-          userRecord = new userModel({
-            name: fullName,
-            email: email,
-            password: 'membership_application_' + Date.now(), // Temporary password for membership applications
-            contact: phone,
-            institute: institute,
-            designation: designation,
-            gender: gender,
-            dateOfBirth: dateOfBirth,
-            expertise: expertise,
-            linkedinProfile: linkedinProfile,
-            bio: expertise,
-            isAccountVerified: false // Since this is a guest registration
-          });
-          await userRecord.save();
-          console.log('New user created for membership application');
-        } else {
-          // Update existing user with new information
-          userRecord.name = fullName;
-          userRecord.contact = phone;
-          userRecord.institute = institute;
-          userRecord.designation = designation;
-          userRecord.gender = gender;
-          userRecord.dateOfBirth = dateOfBirth;
-          userRecord.expertise = expertise;
-          if (linkedinProfile) userRecord.linkedinProfile = linkedinProfile;
-          userRecord.bio = expertise;
-          await userRecord.save();
-          console.log('Existing user updated for membership application');
-        }
-      }
-    } catch (userError) {
-      console.error('Error handling user data:', userError);
-      // Continue with membership creation even if user update fails
+    if (!membership) {
+      membership = await membershipModel.create({
+        userId: userRecord._id,
+        membershipType: mappedMembershipType,
+        duration,
+        amount,
+        currency: 'inr',
+        status: 'pending',
+        purchaseDate: new Date(),
+        expiresAt,
+        paymentIntentId: `app_${Date.now()}_${userRecord._id}`,
+        benefits: [
+          'Access to ISAMC resources',
+          'Networking opportunities',
+          'Event access',
+          'Professional development',
+        ],
+      });
     }
 
-    // Create membership entry
-    try {
-      if (userRecord) {
-        // Parse price and determine duration
-        const amount = parseInt(tierPrice) || 0;
-        const duration = tierDuration?.toLowerCase().includes('life') ? 'lifetime' : 'annual';
-        
-        // Map frontend membership types to backend enum values
-        const membershipTypeMapping = {
-          'Student Membership': 'Student',
-          'Regular Membership': 'Regular', 
-          'Senior Membership': 'Senior',
-          'Institutional Membership': 'Institutional',
-          'International Membership': 'International',
-          'Life Membership': 'Life',
-          'Student': 'Student',
-          'Regular': 'Regular',
-          'Senior': 'Senior',
-          'Institutional': 'Institutional',
-          'International': 'International',
-          'Life': 'Life'
-        };
-        
-        const mappedMembershipType = membershipTypeMapping[membershipType] || membershipType;
-        
-        // Calculate expiry date for annual memberships
-        let expiresAt = null;
-        if (duration === 'annual') {
-          expiresAt = new Date();
-          expiresAt.setFullYear(expiresAt.getFullYear() + 1);
-        }
+    // Deliver both notifications concurrently. SMTP has bounded timeouts, so a
+    // provider outage can no longer leave the browser spinner running forever.
+    const [adminDelivery, applicantDelivery] = await Promise.allSettled([
+      sendCpanelEmail({
+        to: process.env.CONTACT_EMAIL || process.env.CPANEL_EMAIL_USER,
+        subject: `New Membership Application: ${membershipType}`,
+        html: mailOptions.html,
+        text: mailOptions.text,
+        replyTo: email,
+      }),
+      sendCpanelEmail({
+        to: email,
+        subject: 'Thank you for your ISAMC membership application',
+        html: confirmationMailOptions.html,
+        text: confirmationMailOptions.text,
+      }),
+    ]);
 
-        // Check if membership already exists for this user and type
-        const existingMembership = await membershipModel.findOne({
-          userId: userRecord._id,
-          membershipType: mappedMembershipType,
-          status: { $in: ['active', 'pending'] }
-        });
+    const emailStatus = {
+      adminNotification: adminDelivery.status === 'fulfilled',
+      applicantConfirmation: applicantDelivery.status === 'fulfilled',
+    };
+    const allEmailsSent = Object.values(emailStatus).every(Boolean);
 
-        if (!existingMembership) {
-          const newMembership = new membershipModel({
-            userId: userRecord._id,
-            membershipType: mappedMembershipType,
-            duration: duration,
-            amount: amount,
-            currency: 'inr',
-            status: 'pending', // Start as pending until admin approval
-            purchaseDate: new Date(),
-            expiresAt: expiresAt,
-            paymentIntentId: `app_${Date.now()}_${userRecord._id}`, // Temporary ID for application
-            benefits: [
-              'Access to ISAMC resources',
-              'Networking opportunities',
-              'Event access',
-              'Professional development'
-            ]
-          });
-
-          await newMembership.save();
-          console.log('Membership application created successfully:', newMembership._id);
-        } else {
-          console.log('Membership already exists for this user and type');
-        }
-      }
-    } catch (membershipError) {
-      console.error('Error creating membership entry:', membershipError);
-      // Don't fail the entire request if membership creation fails
-      // The email will still be sent and the application will be processed manually
+    if (!allEmailsSent) {
+      console.error('Membership application saved with email delivery failure', {
+        membershipId: membership._id,
+        adminError:
+          adminDelivery.status === 'rejected'
+            ? adminDelivery.reason?.message
+            : undefined,
+        applicantError:
+          applicantDelivery.status === 'rejected'
+            ? applicantDelivery.reason?.message
+            : undefined,
+      });
     }
 
-    return res.json({
+    return res.status(allEmailsSent ? 200 : 202).json({
       success: true,
-      message: "Membership application submitted successfully! We'll contact you within 3-5 business days."
+      membershipId: membership._id,
+      emailStatus,
+      message: allEmailsSent
+        ? "Membership application submitted successfully! We'll contact you within 3-5 business days."
+        : 'Your application was saved successfully. Email confirmation is temporarily delayed.',
     });
 
   } catch (error) {

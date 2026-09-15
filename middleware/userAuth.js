@@ -28,4 +28,44 @@ const userAuth = async (req,res,next)=>{
     }
 }
 
+export const optionalUserAuth = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.slice('Bearer '.length).trim();
+  if (!token) {
+    return next();
+  }
+
+  try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: 'Server authentication is not configured',
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await userModel.findById(decoded.id).select('-password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your session is no longer valid. Please log in again.',
+      });
+    }
+
+    req.user = user;
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Your session has expired. Please log in again.',
+    });
+  }
+};
+
 export default userAuth;

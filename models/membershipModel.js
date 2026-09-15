@@ -9,7 +9,7 @@ const membershipSchema = new mongoose.Schema({
   membershipType: {
     type: String,
     required: true,
-    enum: ['Student', 'Regular', 'Senior', 'Institutional', 'International', 'Life']
+    enum: ['Student', 'Regular', 'Senior', 'Institutional', 'International', 'Life', 'Honorary']
   },
   duration: {
     type: String,

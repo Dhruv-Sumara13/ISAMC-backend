@@ -29,8 +29,9 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 4000;
 
-// Initialize database connection
-dbConnection();
+// Start one shared connection attempt. Local and serverless entry points await it
+// before accepting requests.
+export const databaseReady = dbConnection();
 
 // Trust proxy (important for rate limiting behind proxy/load balancer)
 app.set('trust proxy', 1);
