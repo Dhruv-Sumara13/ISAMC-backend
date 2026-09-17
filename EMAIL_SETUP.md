@@ -14,6 +14,12 @@ In the Render backend service's Environment settings configure:
 Save the environment settings and deploy the updated backend. Keep API keys
 in Render's environment settings; never commit them or put them in frontend variables.
 
+Run `npm run email:check` in the backend's environment (Render Shell if available)
+to check the selected provider, API credentials, transactional email activation,
+and sender verification. This is read-only: it does not send emails or print
+credentials or recipient addresses. Running it locally checks local settings,
+not Render's settings.
+
 The application is saved before the HTTP success response. Email delivery
 continues after that response, so a successful submission does not prove inbox
 delivery. Render logs show `Email accepted by Brevo` with a message ID when
