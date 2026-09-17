@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import userModel from "../models/userModel.js";
 import membershipModel from "../models/membershipModel.js";
 import sendCpanelEmail from "../utils/cpanelEmail.js";
+import { normalizeMembershipType } from "../utils/membershipType.js";
 
 export const sendContactMessage = async (req, res) => {
   try {
@@ -290,6 +291,14 @@ export const sendMembershipApplication = async (req, res) => {
       tierDuration,
       tierTitle
     } = req.body;
+
+    const mappedMembershipType = normalizeMembershipType(membershipType);
+    if (!mappedMembershipType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please select a valid membership type.',
+      });
+    }
 
     // Only trust an authenticated identity; never accept an arbitrary user ID
     // from the request body.
@@ -581,31 +590,6 @@ The ISAMC Team
       .includes('life')
       ? 'lifetime'
       : 'annual';
-
-    const membershipTypeMapping = {
-      'Student Membership': 'Student',
-      'Regular Membership': 'Regular',
-      'Senior Membership': 'Senior',
-      'Institutional Membership': 'Institutional',
-      'International Membership': 'International',
-      'Life Membership': 'Life',
-      'Honorary Membership': 'Honorary',
-      Student: 'Student',
-      Regular: 'Regular',
-      Senior: 'Senior',
-      Institutional: 'Institutional',
-      International: 'International',
-      Life: 'Life',
-      Honorary: 'Honorary',
-    };
-
-    const mappedMembershipType = membershipTypeMapping[membershipType];
-    if (!mappedMembershipType) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please select a valid membership type.',
-      });
-    }
 
     let expiresAt = null;
     if (duration === 'annual') {
