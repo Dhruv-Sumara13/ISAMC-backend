@@ -6,6 +6,12 @@ services:
     buildCommand: npm install
     startCommand: npm start
     envVars:
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_SENDER_EMAIL
+        sync: false
       - key: NODE_ENV
         value: production
       - key: PORT

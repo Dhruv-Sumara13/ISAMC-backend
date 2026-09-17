@@ -1,6 +1,8 @@
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import logger from '../config/logger.js';
+import sendBrevoEmail from './brevoEmail.js';
+import { getEmailProvider } from './emailProvider.js';
 
 dotenv.config();
 
@@ -54,6 +56,17 @@ const sendCpanelEmail = async ({
   attachments,
   replyTo,
 }) => {
+  if (getEmailProvider() === 'brevo') {
+    try {
+      const info = await sendBrevoEmail({ to, subject, html, text, attachments, replyTo });
+      logger.info('Email accepted by Brevo', { messageId: info.messageId });
+      return info;
+    } catch (error) {
+      logger.error('Brevo email delivery failed', { error: error.message });
+      throw error;
+    }
+  }
+
   const receivers = (Array.isArray(to) ? to : [to])
     .map((receiver) => receiver?.trim())
     .filter(Boolean);
