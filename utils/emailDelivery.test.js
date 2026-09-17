@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import axios from 'axios';
 import sendBrevoEmail from './brevoEmail.js';
 import { getEmailProvider } from './emailProvider.js';
+import { describeBrevoError } from './brevoError.js';
 
 test('Render selects HTTPS when configured; explicit SMTP remains supported', () => {
   assert.equal(getEmailProvider({ RENDER: 'true', BREVO_API_KEY: 'test-key' }), 'brevo');
@@ -40,8 +41,18 @@ test('HTTPS adapter preserves membership email bodies, recipients and reply-to',
     throw Object.assign(new Error('secret request details'), { config: { key: 'test-only-key' }, response: { status: 401, data: { code: 'unauthorized' } } });
   });
   await assert.rejects(sendBrevoEmail({ to: 'admin@example.com', subject: 'Application' }), error => {
-    assert.equal(error.message, 'Brevo email request failed (HTTP 401): unauthorized');
+    assert.match(error.message, /HTTP 401/);
+    assert.match(error.message, /Authorized IPs/);
+    assert.ok(!error.message.includes('test-only-key'));
     assert.equal(error.config, undefined);
     return true;
   });
+});
+
+test('401 diagnostics distinguish IP restrictions from invalid keys without leaking response secrets', () => {
+  const failure = message => ({ response: { status: 401, data: { code: 'unauthorized', message } } });
+  assert.match(describeBrevoError(failure('We have detected you are using an unrecognised IP address 192.0.2.1')), /blocked the server IP/);
+  assert.match(describeBrevoError(failure('Key not found')), /did not recognize/);
+  assert.match(describeBrevoError(failure('API Key is not enabled')), /disabled or inactive/);
+  assert.ok(!describeBrevoError(failure('Key not found: secret-value')).includes('secret-value'));
 });

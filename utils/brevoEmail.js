@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { describeBrevoError } from './brevoError.js';
 
 const requiredSetting = (name) => {
   const value = process.env[name]?.trim();
@@ -37,9 +38,7 @@ const sendBrevoEmail = async ({ to, subject, html, text, replyTo, attachments })
     return data;
   } catch (error) {
     // Axios errors contain API keys and message contents in their config.
-    const status = error.response?.status;
-    const code = error.response?.data?.code || error.code;
-    throw new Error(`Brevo email request failed${status ? ` (HTTP ${status})` : ''}${code ? `: ${code}` : ''}`);
+    throw new Error(describeBrevoError(error));
   }
 };
 

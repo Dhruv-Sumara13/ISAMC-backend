@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import axios from 'axios';
 import { getEmailProvider } from '../utils/emailProvider.js';
+import { describeBrevoError } from '../utils/brevoError.js';
 
 dotenv.config();
 
@@ -26,7 +27,7 @@ async function checkEmail() {
     senders = (await client.get('/senders')).data.senders;
   } catch (error) {
     const status = error.response?.status;
-    if (status === 401) throw new Error('Brevo rejected the API key (401). Replace BREVO_API_KEY with an active Brevo API key, not an SMTP key, then redeploy.');
+    if (status === 401) throw new Error(describeBrevoError(error));
     if (status === 403) throw new Error('Brevo denied access (403). Check account activation, API permissions and authorized IP settings in Brevo.');
     throw new Error(`Brevo connection failed (${status || error.code || 'unknown error'}). Check network access and Brevo service status.`);
   }
