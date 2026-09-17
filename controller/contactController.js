@@ -623,8 +623,14 @@ The ISAMC Team
       });
     }
 
-    // Deliver both notifications concurrently. SMTP has bounded timeouts, so a
-    // provider outage can no longer leave the browser spinner running forever.
+    // Confirm persistence immediately; email delivery must not delay the form.
+    res.status(200).json({
+      success: true,
+      membershipId: membership._id,
+      message: "Membership application submitted successfully! We'll contact you within 3-5 business days.",
+    });
+
+    // The long-running Node server continues both deliveries after responding.
     const [adminDelivery, applicantDelivery] = await Promise.allSettled([
       sendCpanelEmail({
         to: process.env.CONTACT_EMAIL || process.env.CPANEL_EMAIL_USER,
@@ -661,17 +667,11 @@ The ISAMC Team
       });
     }
 
-    return res.status(allEmailsSent ? 200 : 202).json({
-      success: true,
-      membershipId: membership._id,
-      emailStatus,
-      message: allEmailsSent
-        ? "Membership application submitted successfully! We'll contact you within 3-5 business days."
-        : 'Your application was saved successfully. Email confirmation is temporarily delayed.',
-    });
+    return;
 
   } catch (error) {
     console.error("Membership application error:", error);
+    if (res.headersSent) return;
     return res.status(500).json({
       success: false,
       message: "Failed to submit application. Please try again later."

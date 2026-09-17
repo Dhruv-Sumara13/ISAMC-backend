@@ -2,6 +2,7 @@ const membershipTypes = new Map([
   ['student', 'Student'],
   ['regular', 'Regular'],
   ['professional', 'Regular'],
+  ['individual', 'Regular'],
   ['senior', 'Senior'],
   ['institutional', 'Institutional'],
   ['corporate', 'Institutional'],

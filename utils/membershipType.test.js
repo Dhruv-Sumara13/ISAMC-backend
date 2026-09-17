@@ -15,6 +15,8 @@ test('existing categories accept plain names and display labels', () => {
   }
   assert.equal(normalizeMembershipType('  PROFESSIONAL   membership  '), 'Regular');
   assert.equal(normalizeMembershipType('corporate'), 'Institutional');
+  assert.equal(normalizeMembershipType('Individual Membership'), 'Regular');
+  assert.equal(normalizeMembershipType(' individual '), 'Regular');
 });
 
 test('invalid values cannot become membership categories', () => {
