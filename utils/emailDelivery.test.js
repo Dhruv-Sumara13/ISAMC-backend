@@ -4,6 +4,16 @@ import axios from 'axios';
 import sendBrevoEmail from './brevoEmail.js';
 import { getEmailProvider } from './emailProvider.js';
 import { describeBrevoError } from './brevoError.js';
+import { getBrevoApiKey } from './brevoApiKey.js';
+
+test('dashboard key formatting is handled without revealing secrets', () => {
+  for (const value of ['test-key', ' test-key ', '"test-key"', "'test-key'"]) {
+    assert.equal(getBrevoApiKey({ BREVO_API_KEY: value }), 'test-key');
+  }
+  for (const value of ['', 'xsmtpsib-test-secret', 'BREVO_API_KEY=test-secret', 'Bearer test-secret', 'test secret', 'test***secret', 'test...secret']) {
+    assert.throws(() => getBrevoApiKey({ BREVO_API_KEY: value }), error => !error.message.includes('test-secret'));
+  }
+});
 
 test('Render selects HTTPS when configured; explicit SMTP remains supported', () => {
   assert.equal(getEmailProvider({ RENDER: 'true', BREVO_API_KEY: 'test-key' }), 'brevo');

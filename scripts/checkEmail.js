@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 import { getEmailProvider } from '../utils/emailProvider.js';
 import { describeBrevoError } from '../utils/brevoError.js';
+import { getBrevoApiKey } from '../utils/brevoApiKey.js';
 
 dotenv.config();
 
@@ -17,7 +18,7 @@ async function checkEmail() {
   }
   const client = axios.create({
     baseURL: 'https://api.brevo.com/v3',
-    headers: { 'api-key': process.env.BREVO_API_KEY.trim() },
+    headers: { 'api-key': getBrevoApiKey() },
     timeout: 15000,
   });
   let account;

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { describeBrevoError } from './brevoError.js';
+import { getBrevoApiKey } from './brevoApiKey.js';
 
 const requiredSetting = (name) => {
   const value = process.env[name]?.trim();
@@ -14,7 +15,7 @@ const sendBrevoEmail = async ({ to, subject, html, text, replyTo, attachments })
     .filter(Boolean);
   if (!receivers.length) throw new Error('At least one email recipient is required');
   if (!subject?.trim()) throw new Error('Email subject is required');
-  const apiKey = requiredSetting('BREVO_API_KEY');
+  const apiKey = getBrevoApiKey();
   const payload = {
     sender: { email: requiredSetting('BREVO_SENDER_EMAIL'), name: process.env.BREVO_SENDER_NAME || 'ISAMC Team' },
     to: receivers.map(email => ({ email })),
