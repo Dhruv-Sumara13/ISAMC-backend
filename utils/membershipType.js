@@ -9,6 +9,7 @@ const membershipTypes = new Map([
   ['international', 'International'],
   ['life', 'Life'],
   ['honorary', 'Honorary'],
+  ['sustaining', 'Sustaining'],
 ]);
 
 // Tier display names and stored membership categories use different labels.

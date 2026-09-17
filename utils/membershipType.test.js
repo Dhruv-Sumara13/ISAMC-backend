@@ -24,3 +24,8 @@ test('invalid values cannot become membership categories', () => {
     assert.equal(normalizeMembershipType(value), undefined);
   }
 });
+
+test('all current live membership cards are supported', () => {
+  assert.deepEqual(['Student Membership', 'Individual Membership', 'Corporate Membership', 'Sustaining Membership']
+    .map(normalizeMembershipType), ['Student', 'Regular', 'Institutional', 'Sustaining']);
+});
