@@ -1,5 +1,7 @@
+import { executiveCouncilMembers } from './executiveCouncil.js';
 // Sample data for all admin sections
 export const sampleData = {
+  executiveCouncil: executiveCouncilMembers,
   // Membership Tiers
   tier: [
     {
@@ -570,6 +572,7 @@ export const initializeSampleData = async (DB) => {
       let hasUpdates = false;
       
       Object.keys(sampleData).forEach(section => {
+        if (section === 'executiveCouncil' && existingData[section] !== undefined) return;
         if (!existingData[section] || (Array.isArray(existingData[section]) && existingData[section].length === 0)) {
           updateData[section] = sampleData[section];
           hasUpdates = true;

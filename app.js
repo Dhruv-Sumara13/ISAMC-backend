@@ -22,6 +22,8 @@ import newsletterRoutes from './routes/newsletterRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import publicationRoutes from './routes/publicationRoutes.js';
 import equipmentRoutes from './routes/equipmentRoutes.js';
+import { DB } from './models/dbSchema.js';
+import { initializeExecutiveCouncil } from './utils/executiveCouncil.js';
 
 // Load environment variables
 dotenv.config();
@@ -31,7 +33,10 @@ const port = process.env.PORT || 4000;
 
 // Start one shared connection attempt. Local and serverless entry points await it
 // before accepting requests.
-export const databaseReady = dbConnection();
+export const databaseReady = dbConnection().then(async (connection) => {
+  await initializeExecutiveCouncil(DB);
+  return connection;
+});
 
 // Trust proxy (important for rate limiting behind proxy/load balancer)
 app.set('trust proxy', 1);

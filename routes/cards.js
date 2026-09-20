@@ -248,6 +248,15 @@ router.get("/vision", async (req, res) => {
   }
 });
 
+router.get('/executive-council', async (req, res) => {
+  try {
+    const data = await fetchSection('executiveCouncil');
+    res.json({ success: true, data: data || [] });
+  } catch {
+    res.status(500).json({ success: false, message: 'Error fetching executive council' });
+  }
+});
+
 router.get("/leadership", async (req, res) => {
   try {
     const data = await fetchSection("leadership");

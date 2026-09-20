@@ -1,4 +1,5 @@
 import express from "express";
+import { validateCouncilMember } from '../utils/executiveCouncil.js';
 import { DB } from "../models/dbSchema.js";
 import userModel from "../models/userModel.js";
 import membershipModel from "../models/membershipModel.js";
@@ -15,6 +16,15 @@ import { initializeSampleData } from "../utils/sampleData.js";
 import OtherEventController from "../controller/otherEventController.js";
 
 const router = express.Router();
+
+const validateCouncilWrite = (req, res, next) => {
+  if (req.params.sectionName !== 'executiveCouncil') return next();
+  const members = req.path.startsWith('/update-section/') ? req.body : [req.body];
+  if (!Array.isArray(members) || !members.every(validateCouncilMember)) {
+    return res.status(400).json({ success: false, message: 'A member name and optional affiliation are required, with a maximum of 200 characters each.' });
+  }
+  next();
+};
 
 // Other events routes (moved to top)
 router.post('/other-events', OtherEventController.createEvent);
@@ -90,7 +100,7 @@ router.get("/dashboard", userAuth, adminAuth, async (req, res) => {
 });
 
 // Update section data
-router.put("/update-section/:sectionName", userAuth, adminAuth, async (req, res) => {
+router.put("/update-section/:sectionName", userAuth, adminAuth, validateCouncilWrite, async (req, res) => {
   try {
     const { sectionName } = req.params;
     const updateData = req.body;
@@ -116,7 +126,7 @@ router.put("/update-section/:sectionName", userAuth, adminAuth, async (req, res)
 });
 
 // Add item to section array
-router.post("/add-item/:sectionName", userAuth, adminAuth, async (req, res) => {
+router.post("/add-item/:sectionName", userAuth, adminAuth, validateCouncilWrite, async (req, res) => {
   try {
     const { sectionName } = req.params;
     const newItem = { ...req.body, _id: new Date().getTime().toString() };
@@ -142,7 +152,7 @@ router.post("/add-item/:sectionName", userAuth, adminAuth, async (req, res) => {
 });
 
 // Update specific item in section array
-router.put("/update-item/:sectionName/:itemId", userAuth, adminAuth, async (req, res) => {
+router.put("/update-item/:sectionName/:itemId", userAuth, adminAuth, validateCouncilWrite, async (req, res) => {
   try {
     const { sectionName, itemId } = req.params;
     const updateData = req.body;
@@ -307,6 +317,9 @@ const validateBulkUploadItem = (item, sectionName) => {
   const errors = [];
 
   switch (sectionName) {
+    case 'executiveCouncil':
+      if (!validateCouncilMember(item)) errors.push('Valid member name and optional affiliation required (maximum 200 characters each)');
+      break;
     case 'Publications':
       if (!item.title || item.title.trim() === '') {
         errors.push('Title is required');
